@@ -52,13 +52,14 @@ ref_url = "https://docs.google.com/spreadsheets/d/1sUCaZ22aiXJl8WdMYaUCi45ryYt1g
 conn = st.connection("gsheets", type=GSheetsConnection)
 ref_data = conn.read(spreadsheet=ref_url, usecols=[2, 3, 5, 6, 7])
 
-# Read book data - Add your second Google Sheet URL here
+# Read book data with correct columns
 book_url = "https://docs.google.com/spreadsheets/d/1LHJ_1FK4fyZ-jvy_qN4v8kXgGu7Vm2XiHvQVkVoHAdM/edit?usp=sharing"  
-book_data = conn.read(spreadsheet=book_url, usecols=[0, 1, 2, 3, 4, 7])  # Adjust column indices as needed for your book sheet
+# Read all columns needed for search and display
+book_data = conn.read(spreadsheet=book_url)
 
 
 #input section
-# Create three input boxes for keywords
+# Create input boxes for keywords
 col1, col2 = st.columns(2)
 with col1:
     keyword1 = st.text_input("Keyword/Phrase 1")
@@ -73,7 +74,8 @@ search_button = st.button("Search References and Books")
 ref_search_columns = ["Title", "People/identity focus1", "People/identity focus2",
                 "Outcome", "Practices", "Description"]
 
-book_search_columns = ["Title", "Key audience(s)", "Key Groups/themes"]  # These columns will be used for searching
+# Search columns for books
+book_search_columns = ["Title", "Key audience(s)", "Key Groups/themes"]
 
 
 # Function to filter the dataframe based on keywords
@@ -106,9 +108,8 @@ def make_clickable_link_text(url):
     return f'<a href="{url}" target="_blank">Link</a>'
 
 
-# Get the link column names
+# Get the link column name for references
 ref_link_column = ref_data.columns[4]  # The 5th column (index 4) from usecols=[2, 3, 5, 6, 7]
-book_link_column = book_data.columns[5]  # The 5th column from usecols=[0,1,2,3,4,7]
 
 
 # Create a formatted version of the dataframe for display
@@ -120,18 +121,16 @@ def get_display_dataframe(df, link_column):
     return display_df
 
 
-# Function to select and rename columns for book display
+# Function to prepare book display dataframe with the correct columns
 def prepare_book_display_df(df):
-    """Select only Title, Name, Year, and Link columns from book dataframe"""
-    # Assuming column structure based on usecols=[0, 1, 2, 3, 4, 7]
-    # Where Title is at index 0, Name is at index 1, Year is at index 2, and Link is at index 5
-    display_cols = [0, 1, 2, 5]  # Indices of the columns we want to keep
-    
-    # Select only the columns we want to display
-    display_df = df.iloc[:, display_cols].copy()
-    
-    # Rename the columns to our desired names
-    display_df.columns = ["Title", "Name", "Year", "Link"]
+    """Select and order columns for book display as specified"""
+    # Create a new dataframe with just the columns we want in the order specified
+    display_df = pd.DataFrame({
+        "Title": df.iloc[:, 2],  # Title (column #2)
+        "Name": df.iloc[:, 0],   # Name (Column #0)
+        "Year": df.iloc[:, 1],   # Year (column #1)
+        "Link": df.iloc[:, 7]    # Link (column #7)
+    })
     
     # Format the link column
     display_df["Link"] = display_df["Link"].apply(make_clickable_link_text)
@@ -234,14 +233,14 @@ if search_button:
         else:
             st.success(f"Found {len(filtered_book_data)} books matching your search.")
             
-            # Prepare the book data for display with only the specified columns
+            # Prepare the book data for display with only the specified columns in the correct order
             display_book_data = prepare_book_display_df(filtered_book_data)
             
             # Display scrollable table
             display_scrollable_table(display_book_data)
             
             # Download option for results
-            # Note: We'll include all columns in the CSV download
+            # Include all columns in the CSV download
             csv = filtered_book_data.to_csv(index=False)
             st.download_button(
                 label="Download Book Results as CSV",
@@ -262,6 +261,6 @@ else:
     st.markdown("<br><br>", unsafe_allow_html=True)
     
     st.subheader("Sample Books")
-    # Prepare the sample book data with only the specified columns
+    # Prepare the sample book data with the specified columns in the correct order
     initial_book_display_data = prepare_book_display_df(book_data.head(5))
     display_scrollable_table(initial_book_display_data)
