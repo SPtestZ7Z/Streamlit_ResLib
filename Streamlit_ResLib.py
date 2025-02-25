@@ -132,6 +132,10 @@ def prepare_book_display_df(df):
         "Link": df.iloc[:, 7]    # Link (column #7)
     })
     
+    
+    # Convert 'Year' column to integer, handling potential errors
+    display_df['Year'] = pd.to_numeric(display_df['Year'], errors='coerce').fillna(0).astype(int)
+    
     # Format the link column
     display_df["Link"] = display_df["Link"].apply(make_clickable_link_text)
     
