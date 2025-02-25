@@ -1,0 +1,206 @@
+# Streamlit search app
+#This file includes a work in progress adaptations and test to the live streamlit app, before it is deployed live.
+
+
+import pandas as pd
+import streamlit as st
+from streamlit_gsheets import GSheetsConnection
+
+
+# Custom CSS to increase text size throughout the app
+st.markdown("""
+<style>
+    /* Increase font size for the entire app */
+    html, body, [class*="st-"] {
+        font-size: 20px !important;
+    }
+   
+    /* Increase table text size */
+    table {
+        font-size: 18px !important;
+    }
+   
+    /* Adjust header sizes */
+    h1 {
+        font-size: 30px !important;
+    }
+    h2 {
+        font-size: 26px !important;
+    }
+    h3 {
+        font-size: 23px !important;
+    }
+   
+    /* Make input fields larger */
+    .stTextInput input {
+        font-size: 16px !important;
+    }
+   
+    /* Make buttons text larger */
+    .stButton button {
+        font-size: 16px !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+
+st.title("Reference Search")
+st.header("Journal publications and articles", divider='rainbow')
+st.markdown("Welcome to our app where you can find links to all things about careers guidance")
+
+
+#read section
+url = "https://docs.google.com/spreadsheets/d/1sUCaZ22aiXJl8WdMYaUCi45ryYt1g_i0jm6k7IcS9ZQ/edit?usp=sharing"
+conn = st.connection("gsheets", type=GSheetsConnection)
+data = conn.read(spreadsheet=url, usecols=[2, 3, 5, 6, 7])
+
+
+#input section
+# Create three input boxes for keywords
+col1, col2  = st.columns(2)
+with col1:
+    keyword1 = st.text_input("Keyword/Phrase 1")
+with col2:
+    keyword2 = st.text_input("Keyword/Phrase 2")
+
+
+
+
+# Search
+search_button = st.button("Search References")
+
+
+search_columns = ["Title", "People/identity focus1", "People/identity focus2",
+                "Outcome", "Practices", "Description"]
+
+
+# Function to filter the dataframe based on keywords
+def filter_references(df, keywords, columns):
+    """Filter dataframe rows that contain any of the keywords in specified columns"""
+    if not any(keywords):  # If no keywords provided
+        return df
+   
+    # Initialize mask as all False
+    mask = pd.Series(False, index=df.index)
+   
+    # For each keyword and column
+    for keyword in keywords:
+        if not keyword:  # Skip empty keywords
+            continue
+           
+        for col in columns:
+            if col in df.columns:
+                # Update mask for rows where the column contains the keyword (case insensitive)
+                mask = mask | df[col].astype(str).str.contains(keyword, case=False, na=False)
+   
+    return df[mask]
+
+
+# Function to make link clickable with custom text
+def make_clickable_link_text(url):
+    """Convert URL to clickable HTML link with text 'Link' that opens in a new tab"""
+    if pd.isna(url) or not str(url).startswith('http'):
+        return ""
+    return f'<a href="{url}" target="_blank">Link</a>'
+
+
+# Get the link column name
+link_column = data.columns[4]  # The 5th column (index 4) from usecols=[2, 3, 5, 6, 7]
+
+
+# Create a formatted version of the dataframe for display
+def get_display_dataframe(df):
+    """Prepare dataframe for display with formatted links"""
+    display_df = df.copy()
+    # Convert the URLs to HTML links with "Link" text
+    display_df[link_column] = display_df[link_column].apply(make_clickable_link_text)
+    return display_df
+
+
+# Create a scrollable table with CSS
+def display_scrollable_table(df, height="400px"):
+    """Display a scrollable HTML table with the given height and larger text"""
+    # Generate the HTML table
+    html_table = df.to_html(escape=False, index=False)
+   
+    # Add CSS for scrollable table with larger text
+    scrollable_table = f"""
+    <div style="height: {height}; overflow-y: auto; margin-bottom: 20px;">
+        <style>
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 18px;
+            }}
+            th {{
+                background-color: #f1f1f1;
+                padding: 12px 15px;
+                text-align: left;
+                font-weight: bold;
+            }}
+            td {{
+                padding: 12px 15px;
+                text-align: left;
+            }}
+            tr:nth-child(even) {{
+                background-color: #f8f8f8;
+            }}
+            a {{
+                color: #1e88e5;
+                text-decoration: none;
+                font-weight: bold;
+            }}
+            a:hover {{
+                text-decoration: underline;
+            }}
+        </style>
+        {html_table}
+    </div>
+    """
+   
+    # Display the scrollable table
+    st.write(scrollable_table, unsafe_allow_html=True)
+
+
+# Process search when button is clicked
+if search_button:
+    # Gather non-empty keywords
+    keywords = [k for k in [keyword1, keyword2] if k]
+   
+    if not keywords:
+        st.warning("Please enter at least one keyword to search.")
+    else:
+        # Filter the dataframe
+        filtered_data = filter_references(data, keywords, search_columns)
+       
+        if len(filtered_data) == 0:
+            st.info(f"No references found containing: {', '.join(keywords)}")
+            # If no results, show empty table
+            st.subheader("References")
+            display_scrollable_table(pd.DataFrame(columns=data.columns))
+        else:
+            st.success(f"Found {len(filtered_data)} references matching your search.")
+           
+            # Format the filtered data with clickable links that say "Link"
+            display_data = get_display_dataframe(filtered_data)
+           
+            # Display scrollable table
+            st.subheader("References")
+            display_scrollable_table(display_data)
+           
+            # Download option for results
+            csv = filtered_data.to_csv(index=False)
+            st.download_button(
+                label="Download Results as CSV",
+                data=csv,
+                file_name="reference_search_results.csv",
+                mime="text/csv"
+            )
+else:
+    # Show message before searching
+    st.info("Enter keywords above and click 'Search References' to find relevant publications.")
+   
+    # Display initial scrollable table with sample data
+    st.subheader("Sample References")
+    initial_display_data = get_display_dataframe(data.head(10))
+    display_scrollable_table(initial_display_data)
